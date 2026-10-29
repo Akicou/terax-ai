@@ -153,9 +153,9 @@ pub fn hex_decode(hex: &str) -> Result<Vec<u8>, String> {
             .map(|d| d as u8)
             .ok_or_else(|| format!("'{}' is not a hex digit", c as char))
     };
-    clean
-        .chunks_exact(2)
-        .map(|p| Ok((nibble(p[0])? << 4) | nibble(p[1])?))
+    (0..clean.len())
+        .step_by(2)
+        .map(|i| Ok((nibble(clean[i])? << 4) | nibble(clean[i + 1])?))
         .collect()
 }
 
