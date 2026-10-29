@@ -1,8 +1,10 @@
 import { cn, isMarkdownPath } from "@/lib/utils";
+import { DatabasePane } from "@/modules/database/DatabasePaneLazy";
+import { isDatabasePath } from "@/modules/database/lib/paths";
 import { MarkdownViewToggle } from "@/modules/markdown";
 import { useWindowInactive } from "@/modules/theme/WindowActivityBridge";
 import type { EditorTab, Tab } from "@/modules/tabs";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EditorPane, type EditorPaneHandle } from "./EditorPane";
 
 type Props = {
@@ -90,6 +92,8 @@ export function EditorStack({
   }, [editors]);
 
   const windowInactive = useWindowInactive();
+  // Database tabs the user chose to open as a plain file.
+  const [asFile, setAsFile] = useState<ReadonlySet<number>>(() => new Set());
 
   if (editors.length === 0) return null;
   return (
@@ -114,14 +118,23 @@ export function EditorStack({
                   renderedHint="Save to preview"
                 />
               )}
-              <EditorPane
-                ref={getRefCallback(t.id)}
-                path={t.path}
-                overrideLanguage={t.overrideLanguage}
-                onDirtyChange={getDirtyCallback(t.id)}
-                onClose={getCloseCallback(t.id)}
-                mediaActive={visible && !windowInactive}
-              />
+              {isDatabasePath(t.path) && !asFile.has(t.id) ? (
+                <DatabasePane
+                  ref={getRefCallback(t.id)}
+                  path={t.path}
+                  onDirtyChange={getDirtyCallback(t.id)}
+                  onOpenAsText={() => setAsFile((s) => new Set(s).add(t.id))}
+                />
+              ) : (
+                <EditorPane
+                  ref={getRefCallback(t.id)}
+                  path={t.path}
+                  overrideLanguage={t.overrideLanguage}
+                  onDirtyChange={getDirtyCallback(t.id)}
+                  onClose={getCloseCallback(t.id)}
+                  mediaActive={visible && !windowInactive}
+                />
+              )}
             </div>
           </div>
         );

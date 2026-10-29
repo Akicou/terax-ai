@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM1REJGQTJEQkIxNTE5QUYKUldTdkdSVzdMZnJieGVndTljVCsrWFVESXI5OS9FVlIwSW1VaEhHZ3NhcXVEb0xYWklRRWVEM1kK",
+      "endpoints": [
+        "https://github.com/Akicou/terax-ai/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

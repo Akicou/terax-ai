@@ -260,6 +260,7 @@ pub fn run() {
         .manage(lsp::LspState::default())
         .manage(fs::supersede::Supersede::default())
         .manage(fs::index::FileIndexState::default())
+        .manage(modules::db::DbState::default())
         .manage({
             let registry = workspace::WorkspaceRegistry::default();
             workspace::bootstrap_registry(&registry);
@@ -289,6 +290,13 @@ pub fn run() {
             fs::file::fs_write_file,
             fs::file::fs_stat,
             fs::file::fs_canonicalize,
+            modules::db::db_open,
+            modules::db::db_close,
+            modules::db::db_schema,
+            modules::db::db_rows,
+            modules::db::db_apply,
+            modules::db::db_query,
+            modules::db::db_interrupt,
             fs::mutate::fs_create_file,
             fs::mutate::fs_create_dir,
             fs::mutate::fs_rename,

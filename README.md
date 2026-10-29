@@ -36,6 +36,9 @@
 
 ---
 
+> [!IMPORTANT]
+> **This is the Akicou fork of Terax.** It adds a SQLite database viewer and editor (`.db`, `.sqlite`, `.sqlite3`, `.db3`). Fork installers are on [this fork's Releases](https://github.com/Akicou/terax-ai/releases/latest) and are **not code-signed**, so your OS warns once on first install. See [Installing the fork's unsigned builds](#installing-the-forks-unsigned-builds). Installed copies auto-update from this fork, not from upstream.
+
 Terax is a lightweight open-source terminal-first AI-native development environment (ADE) built on Tauri 2 + Rust and React 19. A native PTY backend with a WebGL renderer, an agentic AI side-panel that runs against your own keys or fully local models, plus a code editor, file explorer, source control with a git graph, and a web preview pane built in. About 7-8 MB on disk. No telemetry. No account.
 
 > [!NOTE]
@@ -123,6 +126,19 @@ Terax is a lightweight open-source terminal-first AI-native development environm
 ## Install
 
 Latest installers are on the [Releases](https://github.com/crynta/terax-ai/releases/latest) page. Terax auto-updates from there.
+
+### Installing the fork's unsigned builds
+
+Builds from [Akicou/terax-ai releases](https://github.com/Akicou/terax-ai/releases/latest) are free, unsigned builds: no paid Apple Developer ID or Windows code-signing certificate. The app is the same; only the OS trust prompt differs. Updates are still verified: the in-app updater only installs releases signed with the fork's own update key.
+
+| OS | Download | First-launch prompt |
+| --- | --- | --- |
+| **Windows** | `Terax_<version>_x64-setup.exe` | SmartScreen says *"Windows protected your PC"*. Click **More info → Run anyway**. Installs per-user (no admin) and replaces an existing Terax install, keeping your settings. |
+| **macOS (Apple Silicon)** | `Terax_<version>_aarch64.dmg` | Gatekeeper says the app *"is damaged"* or *"can't be opened"*. After dragging it to Applications, run `xattr -cr /Applications/Terax.app` once, then open it normally. |
+| **macOS (Intel)** | `Terax_<version>_x64.dmg` | Same as Apple Silicon. |
+| **Linux** | `.AppImage`, `.deb` or `.rpm` | No prompt. For the AppImage: `chmod +x Terax_*.AppImage`. |
+
+Publishing a new fork release (maintainers): `git tag akicou-v<version> && git push origin akicou-v<version>`. [`release-fork.yml`](.github/workflows/release-fork.yml) builds every platform and publishes the release, and installed copies offer the update. The version must be higher than the last fork release. It needs one repository secret, `TAURI_SIGNING_PRIVATE_KEY`.
 
 ### Windows notes
 

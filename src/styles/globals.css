@@ -407,6 +407,36 @@ html *::-webkit-scrollbar {
   );
 }
 
+/* Database grid: wide tables scroll sideways, so both bars stay visible and
+ * grabbable (the global rule above hides them). */
+.terax-data-grid {
+  scrollbar-width: thin !important;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent)
+    transparent !important;
+}
+.terax-data-grid::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+  display: block !important;
+}
+.terax-data-grid::-webkit-scrollbar-track,
+.terax-data-grid::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.terax-data-grid::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 22%, transparent);
+  background-clip: padding-box;
+}
+.terax-data-grid::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(
+    in srgb,
+    var(--foreground) 36%,
+    transparent
+  );
+}
+
 /* Motion tokens. Reduced-motion zeroes the durations as a global snap. */
 :root {
   --dur-fast: 160ms;

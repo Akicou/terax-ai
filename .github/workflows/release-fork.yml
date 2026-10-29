@@ -1,0 +1,206 @@
+name: Release (fork)
+
+# Free, unsigned release builds for the Akicou/terax-ai fork. Upstream's
+# release.yml needs paid Apple notarization and SignPath certificates; this
+# workflow skips both. It runs on `akicou-v*` tags only, so upstream's `v*`
+# trigger never fires for fork tags (and this one never fires upstream).
+#
+#   git tag akicou-v0.9.1 && git push origin akicou-v0.9.1
+#
+# The version after `akicou-v` becomes the app version, and installed copies
+# auto-update to it. Builds use src-tauri/tauri.fork.conf.json, which points the
+# updater at this fork's releases and its own key.
+#
+# Required secret: TAURI_SIGNING_PRIVATE_KEY (content of the updater private
+# key generated with `pnpm tauri signer generate`). Optional:
+# TAURI_SIGNING_PRIVATE_KEY_PASSWORD when the key has one.
+
+on:
+  push:
+    tags:
+      - "akicou-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "App version to build (e.g. 0.9.1). Release is created as tag akicou-v<version>."
+        required: true
+
+jobs:
+  publish-tauri:
+    if: github.repository == 'Akicou/terax-ai'
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+            rust-target: aarch64-apple-darwin
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+            rust-target: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+            rust-target: ""
+          # NSIS only: the MSI needs a numeric-only version and its own
+          # signing story; the NSIS installer is what the updater uses.
+          - platform: windows-latest
+            args: --bundles nsis
+            rust-target: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#akicou-v}"
+          fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Not a semver version: $VERSION"; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=akicou-v$VERSION" >> "$GITHUB_OUTPUT"
+          jq --arg v "$VERSION" '.version = $v' src-tauri/tauri.fork.conf.json \
+            > src-tauri/tauri.fork.release.json
+
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            patchelf
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+          key: fork-${{ matrix.platform }}-${{ matrix.rust-target }}
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - id: tauri
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TERAX_CLI_TARGET: ${{ matrix.rust-target }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ steps.version.outputs.tag }}
+          releaseName: "Terax ${{ steps.version.outputs.version }} (Akicou fork)"
+          releaseBody: |
+            Unofficial build of the Akicou/terax-ai fork. Installers are not code-signed;
+            see the README section "Installing the fork's unsigned builds" for the
+            one-time OS prompts. Installed copies auto-update from this fork.
+          # Published at once so releases/latest/download/latest.json resolves.
+          releaseDraft: false
+          prerelease: false
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.args }} --config src-tauri/tauri.fork.release.json --ignore-version-mismatches
+
+      # Same AppImage fix as upstream release.yml: drop the bundled libwayland
+      # so newer Mesa hosts load their own copy, then re-sign for the updater.
+      - name: Fix AppImage wayland libs and re-sign
+        if: matrix.platform == 'ubuntu-22.04'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          APPIMAGE=$(ls src-tauri/target/release/bundle/appimage/*.AppImage | head -n1)
+          BASENAME=$(basename "$APPIMAGE")
+
+          WORK=$(mktemp -d)
+          cp "$APPIMAGE" "$WORK/"
+          pushd "$WORK" >/dev/null
+          chmod +x "./$BASENAME"
+          "./$BASENAME" --appimage-extract >/dev/null
+          test -x squashfs-root/usr/bin/terax \
+            || { echo "terax binary missing from AppImage"; exit 1; }
+          find squashfs-root \( -type f -o -type l \) \
+            -name 'libwayland-*.so*' -print -delete
+
+          curl -fsSL -o appimagetool.AppImage \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          chmod +x appimagetool.AppImage
+          ARCH=x86_64 ./appimagetool.AppImage --appimage-extract-and-run squashfs-root "$BASENAME"
+
+          rm -rf squashfs-root
+          chmod +x "./$BASENAME"
+          "./$BASENAME" --appimage-extract >/dev/null
+          if find squashfs-root -name 'libwayland-*.so*' -print -quit | grep -q .; then
+            echo "Wayland library still present after repack"; exit 1
+          fi
+          popd >/dev/null
+
+          cp "$WORK/$BASENAME" "$APPIMAGE"
+          rm -f "$APPIMAGE.sig"
+          pnpm tauri signer sign "$APPIMAGE"
+          gh release upload "$TAG" "$APPIMAGE" "$APPIMAGE.sig" \
+            --clobber --repo "$GITHUB_REPOSITORY"
+
+  # Point latest.json's Linux entries at the re-signed AppImage, once every
+  # matrix leg has merged its platform into the manifest.
+  patch-updater-manifest:
+    needs: publish-tauri
+    if: github.repository == 'Akicou/terax-ai'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Patch latest.json with the re-signed AppImage
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="akicou-v${{ github.event.inputs.version }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "latest.json" --pattern "*_amd64.AppImage.sig" --clobber
+
+          APP_SIG=$(cat ./*_amd64.AppImage.sig)
+          APP_FILE=$(basename "$(ls ./*_amd64.AppImage.sig)" .sig)
+          DL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+
+          jq -e '.platforms | has("linux-x86_64")' latest.json >/dev/null \
+            || { echo "latest.json has no linux-x86_64 entry"; exit 1; }
+
+          jq --arg app "$APP_SIG" --arg url "$DL/$APP_FILE" '
+            .platforms["linux-x86_64"] += {signature: $app, url: $url}
+            | (if .platforms["linux-x86_64-appimage"]
+               then .platforms["linux-x86_64-appimage"] += {signature: $app, url: $url}
+               else . end)
+          ' latest.json > latest.json.tmp
+          mv latest.json.tmp latest.json
+          gh release upload "$TAG" latest.json --clobber --repo "$GITHUB_REPOSITORY"
