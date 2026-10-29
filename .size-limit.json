@@ -15,7 +15,7 @@
     "path": [
       "dist/assets/*.js"
     ],
-    "limit": "1505 KB",
+    "limit": "1530 KB",
     "gzip": true
   },
   {
@@ -43,6 +43,14 @@
       "dist/assets/ghostty-vt-*.wasm"
     ],
     "limit": "450 KB",
+    "gzip": true
+  },
+  {
+    "name": "Database viewer JS (lazy, loaded when a .db file opens)",
+    "path": [
+      "dist/assets/DatabasePane-*.js"
+    ],
+    "limit": "23 KB",
     "gzip": true
   }
 ]
